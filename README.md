@@ -37,7 +37,7 @@ Modularisierung (`lib/`, `test/`, `fixtures/`) und ein QTI-XML-zu-Inventory-Konv
 
 ## Voraussetzungen
 
-- [k6](https://k6.io/docs/getting-started/installation/) 
+- [k6](https://grafana.com/docs/k6/latest/set-up/install-k6/) 
 - Eine ILIAS-9.x-Instanz mit konfiguriertem Standardtest (Random Question Set)
 - Test-Accounts mit Berechtigung auf den Test
 - Ein passendes Inventar-JSON für den zugrundeliegenden Fragenpool (siehe „Inventar-Format")
