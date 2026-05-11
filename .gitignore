@@ -1,0 +1,37 @@
+# Captured HTML responses — may contain student / account data
+*.html
+fixtures/*.html
+!fixtures/*.example.html
+
+# k6 outputs
+*.k6-results.json
+*.k6-results.csv
+summary.html
+summary.json
+
+# Instance configuration (contains credentials — never commit)
+config.js
+
+# Local env / secrets
+.env
+.env.*
+*.secret
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Old/backup variants of the script
+*.js_old
+*.js1
+*.bak
+*.orig
+
+# Node (if scripts/ ends up using node tooling)
+node_modules/
+package-lock.json
+npm-debug.log*
