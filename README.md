@@ -30,7 +30,6 @@ Bewusst nicht unterstützt (nur Empty-Ping, keine Antwortdaten): `imagemap`, `fi
 ├── config.example.js        # Vorlage für die Instanz-Konfiguration
 ├── inventory.json           # Frage-Inventar (Title → Type-Spec)
 ├── README.md
-├── CONTRIBUTING.md
 └── LICENSE                  # GPL-3.0
 ```
 
