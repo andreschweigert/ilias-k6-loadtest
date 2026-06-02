@@ -208,6 +208,84 @@ async function doLogin(page, username) {
 
 // ─── Phase 2: Test starten ──────────────────────────────────────────────────────
 
+// Wartet bis der Frage-Player (#taForm) sichtbar ist. true/false statt Throw.
+async function waitForPlayer(page, timeout) {
+  try {
+    await page.locator("#taForm").waitFor({ state: "visible", timeout });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Erkennt die Pflicht-Übersichtsseite (kein taForm, aber Player-Navigations-
+// Links bzw. cmd=outQuestionSummary in der URL).
+async function isOverviewPage(page) {
+  let url = "";
+  try { url = page.url(); } catch {}
+  if (url.includes("outQuestionSummary") || url.includes("outTestSummary")) return true;
+  return !!(await safeEvaluate(page, () =>
+    !document.getElementById("taForm") &&
+    !!document.querySelector(
+      'a[href*="cmd=resumePlayer"], a[href*="cmd=startTestPlayer"], ' +
+      'a[href*="cmd=gotoQuestion"], a[href*="cmd=showQuestion"]'
+    ), null, "is-overview"));
+}
+
+// Navigiert von der Übersichtsseite in den Frage-Player. Probiert
+// locale-unabhängige Player-Command-Links in Prioritäts-Reihenfolge, dann
+// einen Text-Button als Fallback.
+async function enterPlayerFromOverview(page, username) {
+  const candidates = [
+    'a[href*="cmd=resumePlayer"]',
+    'a[href*="cmd=startTestPlayer"]',
+    'a[href*="cmd=gotoQuestion"]',
+    'a[href*="cmd=showQuestion"]',
+  ];
+  for (const sel of candidates) {
+    const loc = page.locator(sel).first();
+    try {
+      await loc.waitFor({ state: "visible", timeout: 2000 });
+      await loc.click();
+      return true;
+    } catch {}
+  }
+  const btn = page
+    .locator("a, button")
+    .filter({ hasText: /Test fortsetzen|Bearbeitung fortsetzen|erste Frage|Zur Frage/i })
+    .first();
+  try {
+    await btn.waitFor({ state: "visible", timeout: 2000 });
+    await btn.click();
+    return true;
+  } catch {}
+  console.warn(`[${username}] kein Übersicht→Frage-Element gefunden`);
+  return false;
+}
+
+// Diagnose bei Fehlschlag: alle cmd=-Links und Buttons der aktuellen Seite
+// loggen, damit der richtige "weiter zur Frage"-Selektor ablesbar ist.
+async function dumpOverviewDiagnostics(page, username) {
+  let url = "";
+  try { url = page.url(); } catch {}
+  const info = await safeEvaluate(page, () => {
+    const out = { links: [], buttons: [] };
+    for (const a of Array.from(document.querySelectorAll('a[href*="cmd="]')).slice(0, 30)) {
+      const m = (a.getAttribute("href") || "").match(/cmd=([A-Za-z0-9_]+)/);
+      out.links.push(`${m ? m[1] : "?"} :: ${(a.textContent || "").trim().slice(0, 40)}`);
+    }
+    for (const b of Array.from(document.querySelectorAll('button, input[type="submit"]')).slice(0, 20)) {
+      out.buttons.push((b.textContent || b.value || "").trim().slice(0, 40));
+    }
+    return out;
+  }, null, "overview-dump");
+  console.log(`[${username}] DIAGNOSE url=${url}`);
+  if (info) {
+    console.log(`[${username}] cmd-Links: ${info.links.join(" | ")}`);
+    console.log(`[${username}] Buttons:   ${info.buttons.join(" | ")}`);
+  }
+}
+
 async function startTest(page, username) {
   const start = Date.now();
 
@@ -256,11 +334,22 @@ async function startTest(page, username) {
     // Kein Modal → ok
   }
 
-  // Warten auf showQuestion-Seite (erkennbar am taForm)
-  try {
-    await page.locator("#taForm").waitFor({ state: "visible", timeout: 15000 });
-  } catch (e) {
-    console.error(`[${username}] taForm nicht erreicht: ${errStr(e)}`);
+  // Warten auf den Frage-Player (#taForm). Manche Test-Konfigurationen
+  // (Random-Set mit Taxonomien o.ä.) rendern nach dem Start zuerst eine
+  // Pflicht-Übersichtsseite ("Übersicht Testdurchlauf", cmd=outQuestionSummary)
+  // statt direkt der ersten Frage — dann von dort gezielt in den Player.
+  let inPlayer = await waitForPlayer(page, 15000);
+
+  if (!inPlayer && (await isOverviewPage(page))) {
+    console.log(`[${username}] Übersichtsseite erkannt — navigiere in erste Frage`);
+    if (await enterPlayerFromOverview(page, username)) {
+      inPlayer = await waitForPlayer(page, 15000);
+    }
+  }
+
+  if (!inPlayer) {
+    console.error(`[${username}] taForm nicht erreicht`);
+    await dumpOverviewDiagnostics(page, username);
     try { await page.screenshot({ path: `/tmp/canary-taform-${username}-${Date.now()}.png` }); } catch {}
     return null;
   }
