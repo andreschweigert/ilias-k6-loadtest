@@ -28,6 +28,7 @@ Bewusst nicht unterstützt (nur Empty-Ping, keine Antwortdaten): `imagemap`, `fi
 .
 ├── loadtest.js              # k6-HTTP-Lasttest (Test-Player end-to-end)
 ├── browser-canary.js        # k6/browser-Canary (echter Chromium, UI-Validierung)
+├── run-canary.sh            # Launcher für den Canary (headless/xvfb/visible)
 ├── config.example.js        # Vorlage für die Instanz-Konfiguration
 ├── inventory.json           # Frage-Inventar (Title → Type-Spec)
 ├── README.md
@@ -118,6 +119,24 @@ k6 run -e VUS=2 browser-canary.js
 - **Eigener Account-Bereich**: Der Canary nutzt `CANARY_OFFSET`/`CANARY_RANGE` (Default `test001`–`test010`), getrennt vom HTTP-Last-Pool aus `config.js` (`offset`/`range`). So teilen sich Browser- und HTTP-VUs nie denselben Account. Halte die beiden Bereiche überschneidungsfrei (Default: HTTP ab `test011`, Canary `test001`–`test010`).
 - Eigene Metriken: `browser_login_duration`, `browser_test_start_duration`, `browser_question_duration`, `browser_finish_duration`, `browser_run_success`, `browser_questions_by_type`, `browser_question_errors`. Bei Handler-/Phasenfehlern wird ein Screenshot nach `/tmp/canary-*.png` geschrieben.
 - ENV: `THINK_MIN`/`THINK_MAX` (Bearbeitungszeit, Default 3–6 s), `MAX_QUESTIONS`, `K6_BROWSER_HEADLESS`.
+
+### Viele Sessions parallel — und Optimierung
+
+Jede Chromium-Instanz kostet real **~300–700 MB RAM + CPU**, sichtbare Fenster zusätzlich Compositor-Overhead. „Viele gleichzeitige Browser" skaliert also nur begrenzt — und meist braucht man es nicht: **Headless-Chromium nutzt dieselbe Engine, führt dasselbe JS aus und rendert identisch.** Für die Validierung bekommst du headless die gleiche Aussagekraft; sichtbar ist nur zum Zuschauen.
+
+Der Launcher `run-canary.sh` setzt die Flags, die viele parallele Instanzen erst praktikabel machen (allen voran `disable-dev-shm-usage` — ohne das crasht Chromium unter Last, wenn `/dev/shm` vollläuft) und bietet drei Modi:
+
+```bash
+./run-canary.sh 20               # 20 VUs, headless        → skaliert am besten
+MODE=xvfb    ./run-canary.sh 20  # 20 VUs, headful im virtuellen Display (Server ohne Monitor)
+MODE=visible ./run-canary.sh 2   # echte Fenster auf einem Desktop (nur wenige!)
+```
+
+- **Headless (1):** der skalierbare Default. Obergrenze grob `(freies RAM in GB) / 0.6` VUs — 16 GB frei ≈ 25 VUs. Hochtasten und dabei `free -h` / `htop` beobachten.
+- **Xvfb (2):** echter *headful*-Renderpfad ohne Monitor, für Server. Braucht `xvfb-run` (`apt-get install -y xvfb`). Nützlich, falls die Instanz headless-Browser anders behandelt.
+- **Visible (3):** echte Fenster — zwangsläufig auf eine Handvoll begrenzt, nur für lokales Debugging.
+
+Eigene Flags via `K6_BROWSER_ARGS` überschreiben die Defaults des Launchers. **Architektur-Hinweis:** Für reine Server-Last brauchst du keine N Browser — fahr den HTTP-Lasttest auf hunderte VUs *und* ein paar (2–10) Canaries parallel als „echte Nutzer"-Sonden. Hunderte echte Browser sind ein eigenes Client-seitiges Last-Problem, keine Server-Validierung.
 
 ## Inventar-Format
 
