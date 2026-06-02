@@ -10,8 +10,13 @@
  *   2) edit config.js (baseUrl, refId, clientId, password, accounts)
  *   3) k6 run -e SMOKE=1 -e VUS=1 -e ITERATIONS=1 loadtest.js
  *
- * Stage 1 (sustained load):
- *   k6 run --vus 5 --duration 5m loadtest.js
+ * Stage 1 (Klausur-Andrang — 1 Student = 1 Session):
+ *   k6 run -e VUS=200 loadtest.js
+ *   → 200 VUs, jeder VU fährt GENAU EINE Session. Der Account-Pool muss
+ *     ≥ VUS sein (sonst Abbruch im setup), damit kein VU einen Account
+ *     wiederholt und fälschlich als "dirty" zählt.
+ *   Hinweis: VUS über -e setzen, NICHT über --vus/--duration — letztere
+ *   verwerfen den Scenario-Block und lassen die VUs loopen (→ dirty accounts).
  *
  * Logging:
  *   LOG_LEVEL=error|warn|info|debug (default: info; SMOKE forces debug).
@@ -19,7 +24,9 @@
  * Other ENV variables:
  *   MAX_QUESTIONS   Loop safety net (default: 50). Hitting it fails the
  *                   max_questions_hit threshold and turns the run red.
- *   VUS, ITERATIONS Override the shared-iterations executor at runtime.
+ *   VUS             Anzahl gleichzeitiger Studierender (per-vu-iterations).
+ *   ITERATIONS      Sessions PRO VU (default 1 = "1 Student, 1 Klausur").
+ *                   >1 nur sinnvoll, wenn der Test mehrere Durchläufe erlaubt.
  *
  * Inventory:
  *   inventory.json must sit next to this script. It maps question titles to
@@ -98,7 +105,11 @@ const MAX_QUESTIONS = parseInt(__ENV.MAX_QUESTIONS || "50");
 export const options = {
   scenarios: {
     exam_session: {
-      executor: "shared-iterations",
+      // per-vu-iterations: jeder VU fährt `iterations` Sessions (default 1).
+      // Modell "1 Student = 1 Session" → kein VU wiederholt einen Account,
+      // also keine falschen dirty_accounts. iterations ist hier PRO VU
+      // (nicht der Gesamt-Pool wie bei shared-iterations).
+      executor: "per-vu-iterations",
       vus: VUS_ENV,
       iterations: ITER_ENV,
       maxDuration: "30m",
@@ -1035,6 +1046,36 @@ function doLogout(username, html) {
   http.get(
     `${BASE_URL}/ilias.php?baseClass=ilstartupgui&cmd=showLogout&lang=de&client_id=${CLIENT_ID}`,
     { tags: { phase: "logout", step: "show" } }
+  );
+}
+
+// ─── Setup (läuft einmal vor allen VUs) ──────────────────────────────────────────
+
+/**
+ * Pool-Sizing-Guard für das Modell "1 Student = 1 Session".
+ * Jeder VU braucht einen eigenen Account — getUsername() mappt
+ * ((__VU-1) % range) + 1 + offset, d.h. ab VUS > range teilen sich zwei VUs
+ * denselben Account und treten sich gegenseitig in den Test-Run (→ dirty).
+ *
+ * Greift nur, wenn VUS über -e VUS=… kommt. Wird --vus auf der CLI gesetzt,
+ * verwirft k6 ohnehin den Scenario-Block (siehe Header-Kommentar) — dann
+ * stimmt VUS_ENV nicht mehr und der Guard kann es nicht prüfen.
+ */
+export function setup() {
+  if (VUS_ENV > ACCOUNT_RANGE) {
+    throw new Error(
+      `VUS (${VUS_ENV}) > Account-Pool-Range (${ACCOUNT_RANGE}). ` +
+      `Im Modell "1 Student = 1 Session" braucht jeder VU einen eigenen Account. ` +
+      `ACCOUNT_RANGE erhöhen oder VUS senken.`
+    );
+  }
+  const firstIdx = ACCOUNT_OFFSET + 1;
+  const lastIdx = ACCOUNT_OFFSET + Math.min(VUS_ENV, ACCOUNT_RANGE);
+  log.info(
+    `[setup] ${VUS_ENV} VU(s), 1 Session/VU. Accounts ` +
+    `${ACCOUNT_PREFIX}${String(firstIdx).padStart(ACCOUNT_PAD_LENGTH, "0")}` +
+    `..${ACCOUNT_PREFIX}${String(lastIdx).padStart(ACCOUNT_PAD_LENGTH, "0")} ` +
+    `(Pool-Range ${ACCOUNT_RANGE}).`
   );
 }
 

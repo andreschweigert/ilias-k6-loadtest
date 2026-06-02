@@ -52,9 +52,17 @@ $EDITOR config.js       # baseUrl, refId, clientId, password, accounts
 # 2) Smoke-Lauf (1 VU, 1 Iteration, kurze Bearbeitungszeiten, Debug-Logs)
 k6 run -e SMOKE=1 -e VUS=1 -e ITERATIONS=1 loadtest.js
 
-# 3) Stufe 1 (5 VUs, 5 Minuten Dauerlast)
-k6 run --vus 5 --duration 5m loadtest.js
+# 3) Stufe 1 (Klausur-Andrang: 200 Studierende, jeder genau eine Session)
+k6 run -e VUS=200 loadtest.js
 ```
+
+> **Wichtig:** VUs immer über `-e VUS=…` setzen, **nicht** über `--vus`/`--duration`.
+> Der Scenario-Block nutzt den `per-vu-iterations`-Executor (jeder VU fährt
+> genau eine Klausur-Session — Modell „1 Student = 1 Session"). Setzt man
+> `--vus`/`--duration` auf der CLI, verwirft k6 den Scenario-Block, die VUs
+> loopen, fahren denselben Account mehrfach und produzieren falsche
+> `dirty_accounts`-Treffer. Der `setup()`-Guard bricht außerdem ab, wenn
+> `VUS` größer als der Account-Pool ist.
 
 ## Konfiguration
 
@@ -79,8 +87,8 @@ Schichten: Code-Defaults ← `config.js` ← ENV-Variable. ENV gewinnt (praktisc
 
 | Variable        | Default                  | Bedeutung                                                              |
 | --------------- | ------------------------ | ---------------------------------------------------------------------- |
-| `VUS`           | `1`                      | Virtual Users (`shared-iterations`-Executor)                           |
-| `ITERATIONS`    | `1`                      | Gesamt-Iterationen über alle VUs                                       |
+| `VUS`           | `1`                      | Gleichzeitige Studierende (`per-vu-iterations`-Executor). Muss ≤ Account-Pool sein. |
+| `ITERATIONS`    | `1`                      | Sessions **pro VU** (Default 1 = „1 Student, 1 Klausur"). >1 nur bei Tests mit mehreren erlaubten Durchläufen. |
 | `SMOKE`         | leer                     | `1` setzt Bearbeitungszeiten auf ~1 s und erzwingt `LOG_LEVEL=debug`   |
 | `LOG_LEVEL`     | `info` (Smoke: `debug`)  | `error` / `warn` / `info` / `debug`                                    |
 | `MAX_QUESTIONS` | `50`                     | Safety-Net für den Frage-Loop; Erreichen färbt den Run rot             |
@@ -88,6 +96,8 @@ Schichten: Code-Defaults ← `config.js` ← ENV-Variable. ENV gewinnt (praktisc
 ## Account-Pool
 
 VUs werden round-robin auf Accounts `<prefix><idx>` gemappt. Mit den Defaults (`prefix=test`, `padLength=3`, `offset=10`, `range=105`) ergeben sich `test011`–`test115` für VU 1–105. Reserviere einen separaten Bereich für Browser-Canaries (z.B. `test001`–`test010`).
+
+**Pool muss ≥ VUS sein.** Im Modell „1 Student = 1 Session" fährt jeder VU genau eine Klausur mit einem eigenen Account. Ist `VUS` größer als `range`, würden sich zwei VUs denselben Account teilen und sich gegenseitig in den Test-Run treten — der `setup()`-Guard bricht den Lauf deshalb mit einer Fehlermeldung ab. Für 200 gleichzeitige Studierende also `range ≥ 200`.
 
 Das Skript bricht den Run pro Account ab, sobald es einen offenen Test-Run erkennt — Marker: `Test fortsetzen` (DE) / `Resume Test` (EN), `cmd=resumePlayer`, `tst_already_passed`. Diese fließen in die `dirty_accounts`-Rate. Zwischen Lauf-Stufen Accounts manuell zurücksetzen.
 
