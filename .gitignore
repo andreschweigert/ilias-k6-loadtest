@@ -6,8 +6,8 @@ fixtures/*.html
 # k6 outputs
 *.k6-results.json
 *.k6-results.csv
-summary.html
-summary.json
+summary*.html
+summary*.json
 
 # Instance configuration (contains credentials — never commit)
 config.js

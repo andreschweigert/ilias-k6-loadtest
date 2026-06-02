@@ -45,6 +45,7 @@ import { check, sleep } from "k6";
 import { parseHTML } from "k6/html";
 import { Counter, Rate, Trend } from "k6/metrics";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.2/index.js";
+import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js";
 import config from "./config.js";
 
 // ─── Inventory (init scope, loaded once) ────────────────────────────────────────
@@ -1146,10 +1147,16 @@ export default function () {
   log.info(`[${username}] ════ ENDE ════`);
 }
 
-// ─── Summary ────────────────────────────────────────────────────────────────────
+// ─── Summary / Reporting ──────────────────────────────────────────────────────
+// stdout-Textsummary wie gehabt + HTML-Report (im Browser öffenbar, unabhängig
+// von Grafana) + JSON für maschinelle Auswertung / Lauf-Historie. Beide Dateien
+// sind via .gitignore (summary*.html / summary*.json) vom Commit ausgeschlossen.
+// Für Time-Series → Grafana stattdessen `k6 run --out …` nutzen (siehe README).
 
 export function handleSummary(data) {
   return {
     "stdout": textSummary(data, { indent: " ", enableColors: true }),
+    "summary.html": htmlReport(data, { title: "ILIAS k6 Lasttest" }),
+    "summary.json": JSON.stringify(data, null, 2),
   };
 }

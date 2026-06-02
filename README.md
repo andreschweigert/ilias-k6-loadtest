@@ -26,7 +26,8 @@ Bewusst nicht unterstützt (nur Empty-Ping, keine Antwortdaten): `imagemap`, `fi
 
 ```
 .
-├── loadtest.js              # k6-Hauptskript
+├── loadtest.js              # k6-HTTP-Lasttest (Test-Player end-to-end)
+├── browser-canary.js        # k6/browser-Canary (echter Chromium, UI-Validierung)
 ├── config.example.js        # Vorlage für die Instanz-Konfiguration
 ├── inventory.json           # Frage-Inventar (Title → Type-Spec)
 ├── README.md
@@ -101,6 +102,23 @@ VUs werden round-robin auf Accounts `<prefix><idx>` gemappt. Mit den Defaults (`
 
 Das Skript bricht den Run pro Account ab, sobald es einen offenen Test-Run erkennt — Marker: `Test fortsetzen` (DE) / `Resume Test` (EN), `cmd=resumePlayer`, `tst_already_passed`. Diese fließen in die `dirty_accounts`-Rate. Zwischen Lauf-Stufen Accounts manuell zurücksetzen.
 
+## Browser-Canary
+
+`browser-canary.js` ist die Ergänzung zum HTTP-Lasttest: statt rohe HTTP-Requests zu feuern, fährt es einen **echten Chromium-Browser** durch eine komplette Test-Session und klickt jede Frage typgerecht an (Single-/Multiple-Choice, Kprim, Numeric, Formula, Textsubset, Cloze, Long-Menu, Ordering H/V, **Matching per Drag-&-Drop**, Errortext). Zweck: validieren, dass die **UI unter HTTP-Last noch bedienbar** ist — JS-/Rendering-Fehler, die der reine HTTP-Pfad nie sieht.
+
+```bash
+# Sichtbarer Browser, 1 VU — zum Zuschauen
+K6_BROWSER_HEADLESS=false k6 run -e VUS=1 browser-canary.js
+
+# Headless, 2 Canary-VUs parallel zum HTTP-Lasttest
+k6 run -e VUS=2 browser-canary.js
+```
+
+- **Chromium erforderlich** — k6/browser startet es selbst, es muss aber installiert sein.
+- **Eigener Account-Bereich**: Der Canary nutzt `CANARY_OFFSET`/`CANARY_RANGE` (Default `test001`–`test010`), getrennt vom HTTP-Last-Pool aus `config.js` (`offset`/`range`). So teilen sich Browser- und HTTP-VUs nie denselben Account. Halte die beiden Bereiche überschneidungsfrei (Default: HTTP ab `test011`, Canary `test001`–`test010`).
+- Eigene Metriken: `browser_login_duration`, `browser_test_start_duration`, `browser_question_duration`, `browser_finish_duration`, `browser_run_success`, `browser_questions_by_type`, `browser_question_errors`. Bei Handler-/Phasenfehlern wird ein Screenshot nach `/tmp/canary-*.png` geschrieben.
+- ENV: `THINK_MIN`/`THINK_MAX` (Bearbeitungszeit, Default 3–6 s), `MAX_QUESTIONS`, `K6_BROWSER_HEADLESS`.
+
 ## Inventar-Format
 
 `./inventory.json` wird beim Skript-Start einmalig geladen. Die Datei mappt Frage-Titel auf typspezifische Specs, mit denen sich gültige Autosave-Bodies bauen lassen ohne dass der Server-State der Antworten bekannt sein muss.
@@ -141,6 +159,28 @@ Thresholds, die den Run rot färben:
 - `max_questions_hit` > 0
 
 Nach ein paar Baseline-Läufen gegen die eigene Instanz kalibrieren.
+
+## Reporting & Grafana
+
+Beide Skripte erzeugen am Lauf-Ende (`handleSummary`) neben der Terminal-Zusammenfassung zusätzlich:
+
+- **`summary.html`** (HTTP-Test) bzw. **`summary-browser.html`** (Canary) — ein im Browser öffenbarer Report ([k6-reporter](https://github.com/benc-uk/k6-reporter), wird zur Laufzeit per Import geladen).
+- **`summary.json`** / **`summary-browser.json`** — die vollständigen Metriken als JSON für maschinelle Auswertung oder Lauf-zu-Lauf-Vergleiche.
+
+Beide Datei-Arten sind via `.gitignore` (`summary*.html` / `summary*.json`, zusätzlich greift `*.html`) vom Commit ausgeschlossen — sie können Last-/Instanz-Details enthalten.
+
+Für **Time-Series-Historie und Grafana-Dashboards** schreibt k6 die Metriken live in eine TSDB, statt nur die Endsumme zu erzeugen:
+
+```bash
+# InfluxDB v1
+k6 run --out influxdb=http://localhost:8086/k6 loadtest.js
+
+# Prometheus (Remote Write) — experimentell, aber stabil im Einsatz
+K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
+  k6 run --out experimental-prometheus-rw loadtest.js
+```
+
+In Grafana dann das offizielle k6-Dashboard importieren (InfluxDB: ID **2587**, Prometheus: ID **19665**). Die Phasen-Tags (`phase:login`, `phase:autosave`, …) und beim Canary `browser_questions_by_type{qtype:…}` lassen sich dort direkt aufschlüsseln.
 
 ## Wie der Parser arbeitet
 
