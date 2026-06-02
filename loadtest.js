@@ -262,17 +262,40 @@ function doLogin(username) {
 
   loginDuration.add(Date.now() - phaseStart);
 
+  const body = loginResp.body || "";
+  const url = (loginResp.url || "").toLowerCase();
+
+  // Negativ-Marker: Das Login-Formular ist (wieder) da → Auth fehlgeschlagen.
+  // ILIAS rendert falsche Credentials als Fehlermeldung MIT erneutem
+  // Login-Formular, oft auf ilias.php statt login.php — die reine URL-Prüfung
+  // (alt: !url.includes("login.php")) würde das fälschlich als Erfolg werten.
+  const loginFormBack =
+    url.includes("login.php") ||
+    body.indexOf("login_form/input_3") !== -1 ||  // Field-Name des Login-Forms
+    body.indexOf('name="login_form') !== -1;
+
+  // Positiv-Marker: eingeloggte Chrome trägt einen Logout-Affordance bzw. einen
+  // rtoken (CSRF-Token, nur auf authentifizierten Seiten), oder wir landen auf
+  // dem Dashboard / Personal Desktop.
+  const authenticatedChrome =
+    /logout\.php/i.test(body) ||
+    body.indexOf("cmd=logout") !== -1 ||
+    /rtoken=/.test(body) ||
+    url.includes("dashboard") ||
+    url.includes("ildashboardgui") ||
+    url.includes("ilpersonaldesktopgui");
+
   const ok = check(loginResp, {
     "login → 200": (r) => r.status === 200,
-    "login → Dashboard/Startseite": (r) =>
-      r.url.toLowerCase().includes("dashboard") ||
-      r.url.toLowerCase().includes("ilpersonaldesktopgui") ||
-      // Nach erfolgreichem Login landet man nicht mehr auf login.php
-      !r.url.includes("login.php"),
+    "login → kein Login-Formular zurück (Auth ok)": () => !loginFormBack,
+    "login → eingeloggte Seite (Logout/rtoken/Dashboard)": () => authenticatedChrome,
   });
 
   if (!ok) {
-    log.error(`[${username}] Login fehlgeschlagen: status=${loginResp.status} url=${loginResp.url}`);
+    log.error(
+      `[${username}] Login fehlgeschlagen: status=${loginResp.status} url=${loginResp.url} ` +
+      `loginFormBack=${loginFormBack} authChrome=${authenticatedChrome}`
+    );
     loginFailures.add(1);
     return false;
   }
