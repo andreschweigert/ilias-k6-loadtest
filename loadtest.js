@@ -45,7 +45,7 @@ import { check, sleep } from "k6";
 import { parseHTML } from "k6/html";
 import { Counter, Rate, Trend } from "k6/metrics";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.0.2/index.js";
-import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js";
+import { htmlReport } from "https://raw.githubusercontent.com/benc-uk/k6-reporter/3.0.4/dist/bundle.js";
 import config from "./config.js";
 
 // ─── Inventory (init scope, loaded once) ────────────────────────────────────────
