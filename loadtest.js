@@ -124,7 +124,10 @@ export const options = {
     },
   },
   thresholds: {
-    http_req_failed:                              ["rate<0.05"],
+    // Not-Aus: bricht den GESAMTEN Lauf ab (Exit-Code 99), wenn die
+    // Fehlerrate nach 60s Anlaufzeit über 5% liegt — eine kollabierende
+    // Instanz wird nicht von 200 VUs weiter gehämmert.
+    http_req_failed: [{ threshold: "rate<0.05", abortOnFail: true, delayAbortEval: "60s" }],
     "http_req_duration{phase:login}":             ["p(95)<5000"],
     "http_req_duration{phase:test_start}":        ["p(95)<5000"],
     "http_req_duration{phase:show_question}":     ["p(95)<3000"],

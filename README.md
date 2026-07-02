@@ -173,7 +173,7 @@ Eigene Metriken (zusätzlich zu den k6-Standards):
 
 Thresholds, die den Run rot färben:
 
-- `http_req_failed` > 5 %
+- `http_req_failed` > 5 % — wirkt zusätzlich als **Not-Aus**: liegt die Fehlerrate nach 60 s Anlaufzeit darüber, bricht k6 den gesamten Lauf ab (Exit-Code 99), statt eine kollabierende Instanz weiter zu belasten
 - p95-Latenz > 5 s für login / test_start / finish, > 3 s für show_question / next_question, > 1,5 s für autosave
 - `dirty_accounts`-Rate > 1 %
 - `max_questions_hit` > 0
