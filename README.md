@@ -169,6 +169,22 @@ Eigene Flags via `K6_BROWSER_ARGS` überschreiben die Defaults des Launchers. **
 
 Ein QTI-XML-zu-Inventar-Konverter ist als geplante `scripts/`-Ergänzung auf der Roadmap. Bis dahin wird das Inventar extern aus dem QTI-Export des Fragenpools gebaut.
 
+## Lasttest-Host vorbereiten
+
+Der HTTP-Test ist generatorseitig genügsam: 200 VUs erzeugen dank Thinktimes nur ~15–20 Requests/s — das schafft eine kleine VM. Für größere Läufe (ab ~500 VUs) lohnt etwas Vorbereitung:
+
+```bash
+ulimit -n 65536                                        # File-Descriptor-Limit (Default oft 1024)
+sysctl -w net.ipv4.ip_local_port_range="1024 65535"    # mehr ephemere Ports
+sysctl -w net.ipv4.tcp_tw_reuse=1                      # TIME_WAIT-Ports wiederverwenden
+```
+
+Außerdem:
+
+- **`LOG_LEVEL=warn`** für Ernst-Läufe mit vielen VUs — die Info-Zeilen pro Session sind bei Smoke-Läufen Gold, ab hunderten VUs nur Konsolen-Rauschen.
+- **Mehrere Hosts** brauchen keine Code-Änderung: Der Account-Pool lässt sich über `ACCOUNT_OFFSET`/`ACCOUNT_RANGE` disjunkt aufteilen — Host A `ACCOUNT_OFFSET=10 ACCOUNT_RANGE=200`, Host B `ACCOUNT_OFFSET=210 ACCOUNT_RANGE=200` → 400 Studierende ohne Account-Überschneidung.
+- Den Generator **nicht auf dem ILIAS-Server selbst** laufen lassen, sonst misst man sich selbst die Latenz kaputt.
+
 ## Metriken & Thresholds
 
 Eigene Metriken (zusätzlich zu den k6-Standards):
