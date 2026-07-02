@@ -22,6 +22,8 @@ Unterstützte Fragetypen (echte Autosave-Bodies):
 
 Bewusst nicht unterstützt (nur Empty-Ping, keine Antwortdaten): `imagemap`, `fileupload`, `text_question`.
 
+Alle HTTP-Requests laufen mit User-Agent **`k6-ilias-lasttest/1.0`** — damit lässt sich der Lasttest-Traffic in Server-Logs und Monitoring filtern bzw. in einer WAF gezielt behandeln. (Der Browser-Canary meldet sich bewusst als normaler Chromium.)
+
 ## Repo-Aufbau
 
 ```

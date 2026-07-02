@@ -111,6 +111,9 @@ const MAX_QUESTIONS = parseInt(__ENV.MAX_QUESTIONS || "50");
 const MAX_DURATION = __ENV.MAX_DURATION || "60m";
 
 export const options = {
+  // Eigene Kennung statt k6-Default — macht Lasttest-Traffic in Server-Logs
+  // und Monitoring filterbar bzw. in einer WAF gezielt allowlistbar.
+  userAgent: "k6-ilias-lasttest/1.0",
   scenarios: {
     exam_session: {
       // per-vu-iterations: jeder VU fährt `iterations` Sessions (default 1).
