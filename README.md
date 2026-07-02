@@ -33,9 +33,13 @@ Alle HTTP-Requests laufen mit User-Agent **`k6-ilias-lasttest/1.0`** — damit l
 ├── run-canary.sh            # Launcher für den Canary (headless/xvfb/visible)
 ├── config.example.js        # Vorlage für die Instanz-Konfiguration
 ├── inventory.json           # Frage-Inventar (Title → Type-Spec)
+├── 1777894590__0__tst_162201.zip   # Demo-Test (ILIAS-9-Export, passend zum Inventar)
+├── 1777894597__0__qpl_162202.zip   # Demo-Fragenpool (Quelle von inventory.json)
 ├── README.md
 └── LICENSE                  # GPL-3.0
 ```
+
+Die beiden ZIPs sind ILIAS-9-Exporte eines Demo-Tests samt zugehörigem Fragenpool (360 Fragen, alle 15 Typen) — in eine eigene Instanz importieren, `refId` in `config.js` setzen, und das mitgelieferte `inventory.json` passt direkt dazu.
 
 Modularisierung (`lib/`, `test/`, `fixtures/`) und ein QTI-XML-zu-Inventory-Konverter unter `scripts/` sind als Roadmap-Punkte geplant.
 
@@ -230,8 +234,8 @@ Pro Frage wird extrahiert:
 - QTI-XML-zu-Inventar-Konverter unter `scripts/`
 - Modularer Aufbau (`lib/parsers.js`, `lib/builders.js`, …) 
 - Reproduzierbare Zufälligkeit über `SEED`-ENV
-- Browser-Canary-Skript als Ergänzung zum HTTP-Lasttest
 - Inventar-Lookup auf stabile QTI-Ident statt freitextlichem Title
+- Browser-Canary: `sort(() => Math.random() - 0.5)` durch den Fisher-Yates-Shuffle aus `loadtest.js` ersetzen (Bias) — spätestens beim `lib/`-Refactoring
 
 ## Mitwirken
 
