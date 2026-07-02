@@ -24,6 +24,8 @@
  * Other ENV variables:
  *   MAX_QUESTIONS   Loop safety net (default: 50). Hitting it fails the
  *                   max_questions_hit threshold and turns the run red.
+ *   MAX_DURATION    Hartes Szenario-Zeitlimit (default: 60m). Muss zur
+ *                   Worst-Case-Session-Dauer passen — setup() warnt sonst.
  *   VUS             Anzahl gleichzeitiger Studierender (per-vu-iterations).
  *   ITERATIONS      Sessions PRO VU (default 1 = "1 Student, 1 Klausur").
  *                   >1 nur sinnvoll, wenn der Test mehrere Durchläufe erlaubt.
@@ -102,6 +104,11 @@ const log = {
 const VUS_ENV = parseInt(__ENV.VUS || "1");
 const ITER_ENV = parseInt(__ENV.ITERATIONS || "1");
 const MAX_QUESTIONS = parseInt(__ENV.MAX_QUESTIONS || "50");
+// Hartes Zeitlimit des Szenarios. k6 killt bei Erreichen alle VUs MITTEN in
+// der Session — halb bearbeitete Test-Runs bleiben zurück und tauchen beim
+// nächsten Lauf als dirty_accounts auf. Muss also zur Worst-Case-Session-Dauer
+// passen (Guard in setup()).
+const MAX_DURATION = __ENV.MAX_DURATION || "60m";
 
 export const options = {
   scenarios: {
@@ -113,7 +120,7 @@ export const options = {
       executor: "per-vu-iterations",
       vus: VUS_ENV,
       iterations: ITER_ENV,
-      maxDuration: "30m",
+      maxDuration: MAX_DURATION,
     },
   },
   thresholds: {
@@ -1079,6 +1086,16 @@ function doLogout(username, html) {
  * verwirft k6 ohnehin den Scenario-Block (siehe Header-Kommentar) — dann
  * stimmt VUS_ENV nicht mehr und der Guard kann es nicht prüfen.
  */
+/**
+ * "60m"/"90s"/"1h" → Sekunden. Zusammengesetzte k6-Formate ("1h30m") werden
+ * nicht geparst → null → Warnung wird übersprungen.
+ */
+function parseDurationSeconds(str) {
+  const m = String(str).match(/^(\d+)(s|m|h)?$/);
+  if (!m) return null;
+  return parseInt(m[1]) * { s: 1, m: 60, h: 3600 }[m[2] || "s"];
+}
+
 export function setup() {
   if (VUS_ENV > ACCOUNT_RANGE) {
     throw new Error(
@@ -1086,6 +1103,24 @@ export function setup() {
       `Im Modell "1 Student = 1 Session" braucht jeder VU einen eigenen Account. ` +
       `ACCOUNT_RANGE erhöhen oder VUS senken.`
     );
+  }
+
+  // Reicht MAX_DURATION für die Worst-Case-Session? Pro Frage: Thinktime +
+  // Sleeps zwischen Auto-Saves (10-20s, siehe playOneQuestion) + ~2s HTTP.
+  // k6 killt bei maxDuration hart mitten in der Session → dirty accounts.
+  const maxSeconds = parseDurationSeconds(MAX_DURATION);
+  if (maxSeconds && !SMOKE_MODE) {
+    const perQuestion = THINK_TIME_MAX + Math.max(0, AUTOSAVES_MAX - 1) * 20 + 2;
+    const worstCase = (10 + MAX_QUESTIONS * perQuestion) * ITER_ENV;
+    if (worstCase > maxSeconds) {
+      log.warn(
+        `[setup] MAX_DURATION (${MAX_DURATION}) < Worst-Case-Session ` +
+        `(~${Math.ceil(worstCase / 60)}m bei ${MAX_QUESTIONS} Fragen × ` +
+        `${ITER_ENV} Iteration(en)). Abgeschnittene Sessions hinterlassen ` +
+        `offene Test-Runs (dirty accounts) — MAX_DURATION erhöhen oder ` +
+        `THINK_MAX/MAX_QUESTIONS senken.`
+      );
+    }
   }
   const firstIdx = ACCOUNT_OFFSET + 1;
   const lastIdx = ACCOUNT_OFFSET + Math.min(VUS_ENV, ACCOUNT_RANGE);

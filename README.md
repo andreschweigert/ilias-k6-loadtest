@@ -94,6 +94,7 @@ Schichten: Code-Defaults ← `config.js` ← ENV-Variable. ENV gewinnt (praktisc
 | `SMOKE`         | leer                     | `1` setzt Bearbeitungszeiten auf ~1 s und erzwingt `LOG_LEVEL=debug`   |
 | `LOG_LEVEL`     | `info` (Smoke: `debug`)  | `error` / `warn` / `info` / `debug`                                    |
 | `MAX_QUESTIONS` | `50`                     | Safety-Net für den Frage-Loop; Erreichen färbt den Run rot             |
+| `MAX_DURATION`  | `60m`                    | Hartes Szenario-Zeitlimit. k6 killt bei Erreichen alle VUs mitten in der Session (→ dirty accounts) — `setup()` warnt, wenn es rechnerisch nicht für `MAX_QUESTIONS` × Thinktime reicht. |
 
 ## Account-Pool
 
