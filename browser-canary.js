@@ -74,12 +74,17 @@ const MAX_QUESTIONS = parseInt(__ENV.MAX_QUESTIONS || "50");
 // ─── Scenarios ──────────────────────────────────────────────────────────────────
 
 const VUS = parseInt(__ENV.VUS || "1");
-const ITER = parseInt(__ENV.ITERATIONS || VUS);
+// Sessions PRO VU (wie loadtest.js). Default 1 = "1 Canary-Account, 1 Session".
+const ITER = parseInt(__ENV.ITERATIONS || "1");
 
 export const options = {
   scenarios: {
     browser_canary: {
-      executor: "shared-iterations",
+      // per-vu-iterations statt shared-iterations: bei shared kann ein
+      // schneller VU eine "übrige" Iteration übernehmen und fährt dann
+      // denselben Account ein zweites Mal → offener Test-Run → dirty.
+      // per-vu-iterations garantiert die 1:1-Bindung VU ↔ Account.
+      executor: "per-vu-iterations",
       options: {
         browser: { type: "chromium" },
       },
