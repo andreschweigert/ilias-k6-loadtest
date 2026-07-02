@@ -836,12 +836,6 @@ function playOneQuestion(username, cmdNode, activeId, sequence, html) {
     return { ok: false, html };
   }
 
-  if (!parsed.formtimestamp) {
-    log.warn(`[${username}] seq=${sequence} (${q.type}): formtimestamp fehlt`);
-    questionFailures.add(1);
-    return { ok: false, html };
-  }
-
   // Auto-Save(s) senden — nur wenn Typ unterstützt.
   const numAutosaves = SUPPORTED_TYPES.has(q.type)
     ? randInt(AUTOSAVES_MIN, AUTOSAVES_MAX)
